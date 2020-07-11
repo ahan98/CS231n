@@ -57,7 +57,7 @@ def svm_loss_naive(W, X, y, reg):
     pass
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-    
+
     return loss, dW
 
 
@@ -76,16 +76,16 @@ def svm_loss_vectorized(W, X, y, reg):
     # result in loss.                                                           #
     #############################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-    
-    # TODO: invert dimensions of W and X so you don't have to transpose them
+
     delta = 1.0
-    scores = (W.T)@(X.T)
+    scores = X@W
+    N,_ = scores.shape
     # correct_scores[i] = score of the true class of x_i
-    correct_scores = np.choose(Y, scores)
+    correct_scores = scores[range(N), y].reshape(N,1)
     scores -= correct_scores
     scores[scores != 0] += delta
-    
-    loss = np.sum(scores[scores > 0]) / len(Y)
+
+    loss = np.sum(scores[scores > 0]) / N
     loss += reg * np.sum(W**2)
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
