@@ -141,7 +141,7 @@ class KNearestNeighbor(object):
 
         # we have to transpose train matrix so that the end result has correct
         # dimensions of n_test x n_train.
-        dists = X @ (self.X_train).T
+        dists = X @ self.X_train.T
         
         # currently, dists[i][j] = the sum of the pixel-wise products between
         # test_i and train_j. Suppose we express the product of the p-th pairwise 
