@@ -24,25 +24,31 @@ def svm_loss_naive(W, X, y, reg):
     dW = np.zeros(W.shape) # initialize the gradient as zero
 
     # compute the loss and the gradient
-    num_classes = W.shape[1]
-    num_train = X.shape[0]
+    num_train, num_dims = X.shape
+    num_classes = W.shape[1] # C
     loss = 0.0
+
     for i in range(num_train):
         scores = X[i].dot(W)
         correct_class_score = scores[y[i]]
         for j in range(num_classes):
             if j == y[i]:
                 continue
+                
             margin = scores[j] - correct_class_score + 1 # note delta = 1
             if margin > 0:
                 loss += margin
+                dW[:,j] += X[i,:]
+                dW[:,y[i]] -= X[i,:]
 
     # Right now the loss is a sum over all training examples, but we want it
     # to be an average instead so we divide by num_train.
     loss /= num_train
+    dW /= num_train
 
     # Add regularization to the loss.
     loss += reg * np.sum(W * W)
+    dW += 2 * reg * W
 
     #############################################################################
     # TODO:                                                                     #
@@ -53,14 +59,13 @@ def svm_loss_naive(W, X, y, reg):
     # code above to compute the gradient.                                       #
     #############################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-    pass
-
+    
+    # As suggested by hint, calculation of gradient is done in the for-loop
+    # structure used to compute loss.
+    
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
     return loss, dW
-
-
 
 def svm_loss_vectorized(W, X, y, reg):
     """
@@ -68,8 +73,6 @@ def svm_loss_vectorized(W, X, y, reg):
 
     Inputs and outputs are the same as svm_loss_naive.
     """
-    dW = np.zeros(W.shape) # initialize the gradient as zero
-
     #############################################################################
     # TODO:                                                                     #
     # Implement a vectorized version of the structured SVM loss, storing the    #
@@ -79,12 +82,13 @@ def svm_loss_vectorized(W, X, y, reg):
 
     delta = 1.0
     scores = X@W
-    N,_ = scores.shape
+    N,D  = X.shape
     # correct_scores[i] = score of the true class of x_i
     correct_scores = scores[range(N), y].reshape(N,1)
     scores -= correct_scores
     scores[scores != 0] += delta
-
+    
+    # for each scores[i][j] > 0, add X[i,:] to dW[:,j]
     loss = np.sum(scores[scores > 0]) / N
     loss += reg * np.sum(W**2)
 
@@ -100,9 +104,42 @@ def svm_loss_vectorized(W, X, y, reg):
     # loss.                                                                     #
     #############################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+    
+    # write half-vectorized first to develop intuition for full-vectorized
+    # for image in range(N):
+    #     mask = np.where(scores[image] > 0)[0]
+    #     image_to_col = X[image,:].reshape(D,1)
+    #     dW[:,mask] += image_to_col
+    #     dW[:,y[image]] -= len(mask) * X[image]
 
-    pass
-
+    coeffs = np.greater(scores, 0).astype('int')
+    coeffs[range(N), y] -= coeffs.sum(axis=1)
+    # suppose coeffs[i][c] = k
+    # if c is the true class of x_i, then this means image x_i had a positive
+    # score for |k| classes.
+    # else if k == 1, then x_i had a positive score with class c.
+    # else if k == 0, then x_i had a score of 0 or less.
+    # hence, coeffs[i][c] stores the coefficient of x_i in the formula for
+    # the gradient of loss_i w.r.t W_c
+    
+    dW = X.T @ coeffs
+    # the sum of the pairwise products of row d (in X.T) and col c (in coeffs)
+    # will be stored in dW[d][c], which makes sense because this means
+    # the d-th dimension has been added to class c count times, where count
+    # is the sum of the coefficients in column c.
+    
+    # intuitively, this dot product simulates adding (or subtracting) image x_i
+    # (as a column # vector) to each class for which x_i had a positive score.
+    
+    # We can imagine dW being filled in row-by-row, rather than column-by-column,
+    # which is more intuitive and is what we did in the naive and half-
+    # vectorized versions. When adding column-wise, we are adding whole images
+    # to a class. But when adding row-wise, we are adding a specific dimension
+    # from each image that scored positively with the current class.
+    
+    dW /= N
+    dW += 2*reg*W
+    
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
     return loss, dW

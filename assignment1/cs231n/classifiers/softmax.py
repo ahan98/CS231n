@@ -34,15 +34,27 @@ def softmax_loss_naive(W, X, y, reg):
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
     scores = X@W # scores[i][j] = s means image x_i has score s for class j
-    N, C = scores.shape
-    for image in range(N):
-        scores[image] -= np.max(scores[image]) # numeric stability
-        scores[image] = np.exp(scores[image])
-        correct_class_score = scores[image][y[image]]
-        loss -= np.log(correct_class_score / scores[image].sum())
-
+    num_train, num_classes = scores.shape
+    # numeric stability, for each row, shift each entry left by row max
+    scores[range(num_train)] -= scores.max(axis=1, keepdims=True)
+    scores = np.exp(scores)
+    
+    for image in range(num_train):
+        s_i = scores[image]
+        correct_class_score = s_i[y[image]]
+        score_sum = s_i.sum()
+        loss -= np.log(correct_class_score / score_sum)
+        
+        for class_ in range(num_classes):
+            p = s_i[class_] / score_sum
+            coeff = p - (class_ == y[image])
+            dW[:, class_] += coeff * X[image,:]
+            
+    loss /= num_train
     loss += reg * (W**2).sum()
-    loss /= N
+    
+    dW /= num_train
+    dW += 2 * reg * W
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
@@ -55,8 +67,6 @@ def softmax_loss_vectorized(W, X, y, reg):
 
     Inputs and outputs are the same as softmax_loss_naive.
     """
-    # Initialize the loss and gradient to zero.
-    dW = np.zeros_like(W)
 
     #############################################################################
     # TODO: Compute the softmax loss and its gradient using no explicit loops.  #
@@ -66,22 +76,26 @@ def softmax_loss_vectorized(W, X, y, reg):
     #############################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    # NOTE: loss formula is expressed differently from naive
-    # loss_i = -f_(y[i]) + log(sum(e^(f_j)))
-    # f_j denotes the score of the j-th class for x_i
-    # y[i] denotes index of true class of x_i
-
     scores = X@W
-    N,_ = scores.shape
-    scores -= scores.max(axis=1, keepdims=True) # numerical stability
-    # correct_scores[i] = -s means the score of the true class of x_i is s.
-    # range iterates through each row. at row i, we take the y[i]-th element.
-    correct_scores_neg = -scores[range(N), y]
+    num_train, num_classes = scores.shape
+    scores[range(num_train)] -= scores.max(axis=1, keepdims=True)
     scores = np.exp(scores)
-
-    correct_scores_neg += np.log(scores.sum(axis=1))
-    loss = correct_scores_neg.sum()/N + reg * (W**2).sum()
-
+    
+    correct_scores = scores[range(num_train), y]
+    score_sums = scores.sum(axis=1)
+    probs = correct_scores / score_sums
+    log_probs = np.log(probs)
+    
+    loss = -log_probs.sum()
+    loss /= num_train
+    loss += reg * (W**2).sum()
+    
+    scores[range(num_train)] /= score_sums.reshape(-1,1)
+    scores[range(num_train), y] -= 1
+    dW = X.T @ scores
+    dW /= num_train
+    dW += 2 * reg * W
+    
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
     return loss, dW
