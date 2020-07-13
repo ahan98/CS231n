@@ -31,6 +31,7 @@ def svm_loss_naive(W, X, y, reg):
     for i in range(num_train):
         scores = X[i].dot(W)
         correct_class_score = scores[y[i]]
+        
         for j in range(num_classes):
             if j == y[i]:
                 continue
@@ -81,16 +82,14 @@ def svm_loss_vectorized(W, X, y, reg):
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
     delta = 1.0
-    scores = X@W
-    N,D  = X.shape
-    # correct_scores[i] = score of the true class of x_i
-    correct_scores = scores[range(N), y].reshape(N,1)
-    scores -= correct_scores
+    scores = X @ W
+    num_train  = X.shape[0]
+    scores -= scores[range(num_train), y].reshape(-1,1)
     scores[scores != 0] += delta
     
     # for each scores[i][j] > 0, add X[i,:] to dW[:,j]
-    loss = np.sum(scores[scores > 0]) / N
-    loss += reg * np.sum(W**2)
+    loss = scores[scores > 0].sum() / num_train
+    loss += reg * (W**2).sum()
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
@@ -113,7 +112,7 @@ def svm_loss_vectorized(W, X, y, reg):
     #     dW[:,y[image]] -= len(mask) * X[image]
 
     coeffs = np.greater(scores, 0).astype('int')
-    coeffs[range(N), y] -= coeffs.sum(axis=1)
+    coeffs[range(num_train), y] -= coeffs.sum(axis=1)
     # suppose coeffs[i][c] = k
     # if c is the true class of x_i, then this means image x_i had a positive
     # score for |k| classes.
@@ -137,8 +136,8 @@ def svm_loss_vectorized(W, X, y, reg):
     # to a class. But when adding row-wise, we are adding a specific dimension
     # from each image that scored positively with the current class.
     
-    dW /= N
-    dW += 2*reg*W
+    dW /= num_train
+    dW += 2 * reg * W
     
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 

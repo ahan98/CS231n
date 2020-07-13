@@ -33,7 +33,7 @@ def softmax_loss_naive(W, X, y, reg):
     #############################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    scores = X@W # scores[i][j] = s means image x_i has score s for class j
+    scores = X @ W # scores[i][j] = s means image x_i has score s for class j
     num_train, num_classes = scores.shape
     # numeric stability, for each row, shift each entry left by row max
     scores[range(num_train)] -= scores.max(axis=1, keepdims=True)
@@ -76,7 +76,7 @@ def softmax_loss_vectorized(W, X, y, reg):
     #############################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    scores = X@W
+    scores = X @ W
     num_train, num_classes = scores.shape
     scores[range(num_train)] -= scores.max(axis=1, keepdims=True)
     scores = np.exp(scores)
