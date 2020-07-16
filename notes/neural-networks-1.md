@@ -131,11 +131,11 @@ Viewing an entire neural network as a family of functions, each parameterized by
 the local weights, we ask: "What families of functions *can't* be modeled by a
 NN?"
 
-It turns out that any NN with at least 2 layers (i.e., at least 1 hidden layer)
-can approximate any continuous function with arbitrary precision. I found
-[this](https://www.youtube.com/watch?v=Ijqkc7OLenI) YouTube video by Michael
-Nielsen excellent for explaining the intuition behind how a 2-layer NN could be
-used as a universal approximator.
+It turns out that there exists a NN with at least 2 layers (i.e., at least 1
+hidden layer) which can approximate any continuous function to arbitrary
+precision. I found [this](https://www.youtube.com/watch?v=Ijqkc7OLenI) YouTube
+video by Michael Nielsen excellent for explaining the intuition behind how NNs
+can be used as universal approximators.
 
 However, this fact alone is not very useful in practice because if use, for
 example, the function $g(x) = \sum_i c_i \mathbb{1}(a_i < x < b_i)$, for
@@ -158,3 +158,20 @@ are made up of eyes, which are made up of edges), so with additional hidden
 layers storing information of these components, performance improves.
 
 ### Setting Number of Layers and Their Sizes
+
+The more nodes there are in our NN, the greater the **capacity**, i.e. the
+family of representable functions increases, since the NN is able to express
+more complex relationships. This can lead to **overfitting**.
+
+It may seem at first that the simpler the data, the more preferable smaller NNs
+become. This is because with a small NN, there are fewer local minima, and these
+minima have high loss and are converged to more quickly. On the other hand, in a
+large NN, there are much more local minima, but many more of these minima have
+better (i.e., lower) loss. Roughly speaking, using a small NN can be high
+variance, since you can either converge to a minimum that happens to have low
+loss, or get stuck in one that has poor loss. However, with a large NN, there
+are many more possible solutions, but the quality between any two solutions is
+more similar (i.e., lower variance).
+
+The moral of the story: use other hyperparameters other than size of the NN to
+address overfitting.
