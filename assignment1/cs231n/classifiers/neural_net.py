@@ -6,6 +6,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 from past.builtins import xrange
 
+# imported by ahan98
+from cs231n.classifiers.softmax import softmax_loss_vectorized
+
 class TwoLayerNet(object):
     """
     A two-layer fully-connected neural network. The net has an input dimension of
@@ -80,7 +83,10 @@ class TwoLayerNet(object):
         #############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        h = X @ W1 + b1             # N x H
+        h_relu = h.copy()
+        h_relu[h_relu < 0] = 0      # ReLU
+        scores = h_relu @ W2 + b2   # N x C
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
@@ -98,7 +104,18 @@ class TwoLayerNet(object):
         #############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        # subtract row max from each row
+        scores[range(N)] -= scores.max(axis=1, keepdims=True)
+        scores_e = np.exp(scores)
+
+        correct_scores = scores_e[range(N), y]
+        score_sums = scores_e.sum(axis=1)
+        probs = correct_scores / score_sums
+        log_probs = np.log(probs)
+
+        loss = -log_probs.sum()
+        loss /= N
+        loss += reg * ((W1**2).sum() + (W2**2).sum())
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
@@ -111,7 +128,44 @@ class TwoLayerNet(object):
         #############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        scores_e[range(N)] /= score_sums.reshape(-1,1)
+        scores_e[range(N), y] -= 1
+        # So far, this softmax calculation is the exact same as in
+        # cs231n.classifiers.softmax.softmax_loss_vectorized
+        # However, that gradient is with respect to the weights, which in this
+        # case would be W2. We need to find the gradient with respect to scores,
+        # and multiply that with the local gradient.
+        # see: http://bigstuffgoingon.com/blog/posts/softmax-loss-gradient/
+        dscores = scores_e / N
+
+        # see: http://cs231n.stanford.edu/handouts/linear-backprop.pdf
+        # backprop scores = h_relu @ W2 + b2
+        grads["W2"] = h_relu.T @ dscores
+        grads["W2"] += 2 * reg * W2
+
+        # see: https://bit.ly/3jhi6ez
+        # In the NN of the linked image, we have an input layer of N+1 neurons
+        # (N for each input x_i, and 1 for the bias). Each x_i neuron is a 1xD
+        # row vector, and the bias neuron is a Cx1 column vector.
+        # The hidden layer of neurons denotes the scores, where each z_c denotes
+        # the scores for x_i. So there are N total score nodes, each with shape
+        # Cx1.
+        # We are interested in the local gradients between each bias and score
+        # neuron, which is just a 1xC vector of 1s. So for each edge between
+        # bias and z_c we have 1^c * dscores. Then, summing across all n edges
+        # gives us:
+        grads["b2"] = dscores.sum(axis=0)
+        # An alternative interpretation that's consistent with matrix
+        # multipliation is:
+        # grads["b2"] = np.ones((N,)) @ dscores
+        # This makes a lot of sense analytically, because the b2 term is
+        # broadcast in the equation: scores = h_relu @ W2 + b2, so explicitly,
+        # we would write: scores = (h_relu @ W2) + (np.ones((1,N)) @ b2), and
+        # then the partial derivative with respect to b2 is np.ones((1,N)).
+        # We know the shape of the "coefficient" of b2 because b2 is 1xC, and we
+        # want to multiply b2 by a vector of ones that gives us shape NxC, so
+        # that vector must be Nx1. Finally, this 1xN is transposed to Nx1, just
+        # like we did above with h_relu.T @ dscores.
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
