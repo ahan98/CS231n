@@ -132,15 +132,18 @@ class TwoLayerNet(object):
         scores_e[range(N), y] -= 1
         # So far, this softmax calculation is the exact same as in
         # cs231n.classifiers.softmax.softmax_loss_vectorized
-        # However, that gradient is with respect to the weights, which in this
-        # case would be W2. We need to find the gradient with respect to scores,
-        # and multiply that with the local gradient.
+        # However, that function computes the gradient with respect to the
+        # weights, which in this case would be W2. Here, we want the gradient
+        # with respect to scores, and multiply that with the local gradient.
         # see: http://bigstuffgoingon.com/blog/posts/softmax-loss-gradient/
         dscores = scores_e / N
 
         # see: http://cs231n.stanford.edu/handouts/linear-backprop.pdf
         # backprop scores = h_relu @ W2 + b2
         grads["W2"] = h_relu.T @ dscores
+        # the logic for adding the gradient of the regularization term follows
+        # from the softmax function we wrote earlier in assignment 1, referenced
+        # above
         grads["W2"] += 2 * reg * W2
 
         # see: https://bit.ly/3jhi6ez
@@ -157,7 +160,7 @@ class TwoLayerNet(object):
         grads["b2"] = dscores.sum(axis=0)
         # An alternative interpretation that's consistent with matrix
         # multipliation is:
-        # grads["b2"] = np.ones((N,)) @ dscores
+        # grads["b2"] = np.ones((1,N)).T @ dscores
         # This makes a lot of sense analytically, because the b2 term is
         # broadcast in the equation: scores = h_relu @ W2 + b2, so explicitly,
         # we would write: scores = (h_relu @ W2) + (np.ones((1,N)) @ b2), and
@@ -166,6 +169,19 @@ class TwoLayerNet(object):
         # want to multiply b2 by a vector of ones that gives us shape NxC, so
         # that vector must be Nx1. Finally, this 1xN is transposed to Nx1, just
         # like we did above with h_relu.T @ dscores.
+
+        # The backpropagation for W1 is b1 is very similar, and the symmetry
+        # between the two stages serves as a kind of sanity check.
+
+        # backprop scores = h_relu @ W2 + b2
+        dh_relu = dscores @ W2.T
+        # backprop h_relu = h[h < 0] = 0
+        dh = dh_relu * (h_relu > 0)
+        # backprop h = X @ W1 + b1
+        grads["W1"] = X.T @ dh
+        grads["W1"] += 2 * reg * W1
+
+        grads["b1"] = dh.sum(axis=0)
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
