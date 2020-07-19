@@ -1,13 +1,9 @@
 # Neural Networks Part 2
-These notes accompany Stanford's own notes
-[here](https://cs231n.github.io/neural-networks-2/)
+*Original course notes
+[here](https://cs231n.github.io/neural-networks-2/)*
 
 **TODO** (topics I don't yet understand at a basic level)
 - PCA & Whitening
-- batch normalization
-- fan-in
-- sparse initialization
-- marginalization (of noise)
 
 ## Data Preprocessing
 
@@ -47,7 +43,8 @@ These notes accompany Stanford's own notes
 
 **Dividing the variances by 1/sqrt(n)**
 - `W = np.random.randn(n) / sqrt(n)`
-- `n` is the "fan-in," i.e. the number of inputs into a neuron
+- `n` is the "fan-in," i.e. the number of inputs (from the previous layer)
+    into a neuron
 - this improves upon the small random number heuristic because now, the weights
     are not proportional to the size of a matrix (where a large matrix would
     have larger weights on average)
@@ -55,16 +52,36 @@ These notes accompany Stanford's own notes
 - note in practice, dividing by `sqrt(2.0/n)` works better
 
 **Sparse Initialization**
-- initalize all weights to zero, but create asymmetry by randomize the number of
-    each neuron's connections
-- TODO
+- initalize all weights to zero, but create asymmetry by randomizing the number
+    of each neuron's connections
+- in practice, this would be done by taking a zero matrix, and then in each row,
+    sample a subset of weights, and assign to the selected weights values drawn
+    from a (small) gaussian distribution
 
 **Initalizating the biases**
 - In practice, initializating all biases to zero is fine because asymmetry is
     already provided to the weights
 
 **Batch Normalization**
-- TODO
+- we know that normalizing the input layer can reduce training time by allowing
+    the gradient to converge more quickly
+- batch normalization attempts to apply this benefit to the hidden layers of the
+    NN
+    - the intuition is that normalization is a convex, differentiable function,
+        leading to faster convergence because the local optimum is the global
+        optimum
+    - detailed paper by [Ioffe and Szegedy](https://arxiv.org/abs/1502.03167)
+- roughly speaking, the PRE-activation hidden layer values (so for example, the
+    values of a hidden layer prior to applying ReLU) are normalized (subtract
+    mean, then divide by standard deviation), and then further shifted/scaled by
+    two *learnable* parameters gamma and beta
+    - gamma and beta allow the distributions room to change from layer-to-layer,
+        since this property might be desirable depending on the problem
+    - note that the changing of activation distribution between consecutive
+        layers is known as "internal covariate shift"
+- Andrew Ng's explanation [video](https://youtu.be/tNIpEZLv_eg)
+    - Ng's follow-up [video](https://youtu.be/nUUqwaxLnWs) explaining *why*
+        batch normalization is effective
 
 ## Regularization
 
@@ -122,10 +139,12 @@ as opposed to a only a few contributing and by a lot.
 
 **Noise in the forward pass**
 - the scaling by `p` during dropout *analytically* marginalizes noise
+    (analytical because we can immediately compute the expected activation for
+    each neuron)
 - we can also *numerically* marginalize noise by taking multiple random samples
     of neurons from a network, and then average their outputs
-- TODO
-    - explain marginalization
+- in this context, to "marginalize" noise means to reduce the effects of noisy
+    input on the output, thus preventing overfitting
 
 **Bias regularization**
 - unlike the weights, the bias does not interact with the data multiplicatively,
@@ -156,7 +175,7 @@ node level, effectively treating the left and right branches as the possible
 
 **Attribute Classification**
 If our problem demands that one object may have multiple labels (such as an
-Instgram photo having multiple hashtags out of a larger subset of hashtags), we
+Instagram photo having multiple hashtags out of a larger subset of hashtags), we
 can use a binary classifier to iterate over the set of possible attributes, and
 determine one at a time whether the i-th data object contains that attribute or
 not.  See the Stanford [notes](https://cs231n.github.io/neural-networks-2/) for
@@ -214,5 +233,5 @@ where the delta margin is denotes the difference between the correct structure
 and the "most incorrect" predicted structure. Unlike gradient descent, which is
 an unconstrained optimization problem ("unconstrained" in the sense that the
 gradients can be any real value), structured prediction, roughly speaking, uses
-solvers which take advantage of the assumptions about the space of structures
-for the specific problem.
+solvers which take advantage of the assumptions which simplify the space of
+structures for the specific problem.
