@@ -68,7 +68,7 @@ class KNearestNeighbor(object):
         num_train = self.X_train.shape[0]
         dists = np.zeros((num_test, num_train))
         for i in range(num_test):
-            for j in range(num_train):                                                                                           
+            for j in range(num_train):
                 #####################################################################
                 # TODO:                                                             #
                 # Compute the l2 distance between the ith test point and the jth    #
@@ -100,13 +100,13 @@ class KNearestNeighbor(object):
             # Do not use np.linalg.norm().                                        #
             #######################################################################
             # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-            
+
             # get (broadcasted) squared diff between test image and each row of X_train
             squared_diff = (X[i] - self.X_train)**2
             # squared_diff[j] is a 1 x D vector which stores the squared pixel-wise
             # diff between test_i and train_j.
             # summing along the rows gives a 1 x num_train vector.
-            
+
             dists[i] = squared_diff.sum(axis=1)
             # dists[i][j] = the sum of the squared pixel-wise diff between
             # test_i and train_j.
@@ -123,7 +123,7 @@ class KNearestNeighbor(object):
         """
         num_test = X.shape[0]
         num_train = self.X_train.shape[0]
-        
+
         #########################################################################
         # TODO:                                                                 #
         # Compute the l2 distance between all test points and all training      #
@@ -142,19 +142,19 @@ class KNearestNeighbor(object):
         # we have to transpose train matrix so that the end result has correct
         # dimensions of n_test x n_train.
         dists = X @ self.X_train.T
-        
+
         # currently, dists[i][j] = the sum of the pixel-wise products between
-        # test_i and train_j. Suppose we express the product of the p-th pairwise 
+        # test_i and train_j. Suppose we express the product of the p-th pairwise
         # pixel product as a * b, where a and b are the respective p-th pixels
         # of test_i and train_j. We want to transform each a * b into
         # (a - b)^2 = a^2 - 2ab + b^2, so we multiple every entry in dists by -2,
         # then perform two broadcast sums, as hinted above.
         dists *= -2
-        
+
         # add to dists the sum of the squares of each test image.
         # the sum is broadcasted left-to-right, along the COLUMNS of dists.
         dists += (X**2).sum(axis=1).reshape(num_test,1)
-        
+
         # add to dists the sum of the squares of each train image.
         # notice we don't need to reshape because X_train is num_train x D,
         # so summing along axis=1 (i.e. rows) produces a 1 x num_train
@@ -191,7 +191,7 @@ class KNearestNeighbor(object):
 
             # get the indices of the K nearest train images to test_i.
             knn_idxs = np.argsort(dists[i])[:k]
-            
+
             # extract the labels of the K nearest train images using their indices.
             closest_y = self.y_train[knn_idxs]
 
