@@ -31,11 +31,11 @@ def svm_loss_naive(W, X, y, reg):
     for i in range(num_train):
         scores = X[i].dot(W)
         correct_class_score = scores[y[i]]
-        
+
         for j in range(num_classes):
             if j == y[i]:
                 continue
-                
+
             margin = scores[j] - correct_class_score + 1 # note delta = 1
             if margin > 0:
                 loss += margin
@@ -60,10 +60,10 @@ def svm_loss_naive(W, X, y, reg):
     # code above to compute the gradient.                                       #
     #############################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-    
+
     # As suggested by hint, calculation of gradient is done in the for-loop
     # structure used to compute loss.
-    
+
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
     return loss, dW
@@ -86,7 +86,7 @@ def svm_loss_vectorized(W, X, y, reg):
     num_train  = X.shape[0]
     scores -= scores[range(num_train), y].reshape(-1,1)
     scores[scores != 0] += delta
-    
+
     # for each scores[i][j] > 0, add X[i,:] to dW[:,j]
     loss = scores[scores > 0].sum() / num_train
     loss += reg * (W**2).sum()
@@ -103,7 +103,7 @@ def svm_loss_vectorized(W, X, y, reg):
     # loss.                                                                     #
     #############################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-    
+
     # write half-vectorized first to develop intuition for full-vectorized
     # for image in range(N):
     #     mask = np.where(scores[image] > 0)[0]
@@ -120,25 +120,25 @@ def svm_loss_vectorized(W, X, y, reg):
     # else if k == 0, then x_i had a score of 0 or less.
     # hence, coeffs[i][c] stores the coefficient of x_i in the formula for
     # the gradient of loss_i w.r.t W_c
-    
+
     dW = X.T @ coeffs
     # the sum of the pairwise products of row d (in X.T) and col c (in coeffs)
     # will be stored in dW[d][c], which makes sense because this means
     # the d-th dimension has been added to class c count times, where count
     # is the sum of the coefficients in column c.
-    
+
     # intuitively, this dot product simulates adding (or subtracting) image x_i
     # (as a column # vector) to each class for which x_i had a positive score.
-    
+
     # We can imagine dW being filled in row-by-row, rather than column-by-column,
     # which is more intuitive and is what we did in the naive and half-
     # vectorized versions. When adding column-wise, we are adding whole images
     # to a class. But when adding row-wise, we are adding a specific dimension
     # from each image that scored positively with the current class.
-    
+
     dW /= num_train
     dW += 2 * reg * W
-    
+
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
     return loss, dW
