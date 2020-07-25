@@ -92,6 +92,8 @@ class TwoLayerNet(object):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
+        N = X.shape[0]
+        X = X.reshape((N,-1))
         h = X @ self.params["W1"] + self.params["b1"]
         #h[h < 0] = 0
         scores = h @ self.params["W2"] + self.params["b2"]
@@ -149,6 +151,7 @@ class TwoLayerNet(object):
         grads["W2"] += self.reg * self.params["W2"] # multiplied implicitly by (0.5 * 2)
         grads["b2"] = np.sum(dscores, axis=0) # (1,C)
         dh = dscores @ self.params["W2"].T # (N,H)
+        # dh *= (h > 0) # backprop relu
 
         # backprop h = X @ W1 + b1
         # shapes: X (N,D), W1 (D,H), b1 (1,H)
