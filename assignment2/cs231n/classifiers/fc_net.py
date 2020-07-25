@@ -120,7 +120,7 @@ class TwoLayerNet(object):
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
         loss, dscores = softmax_loss(scores, y)
-        loss += 0.5 * self.reg * ((self.params["W1"]**2).sum() + (self.params["W2"]**2).sum())
+        loss += 0.5 * self.reg * (np.sum(self.params["W1"]**2) + np.sum(self.params["W2"]**2))
 
         grads = {}
 
@@ -292,15 +292,21 @@ class FullyConnectedNet(object):
 
         N = X.shape[0]
         X = X.reshape((N,-1))
-        self.output[0] = X
-        for i in range(1, self.num_layers + 1):
-            index = str(i)
-            h = self.output[i-1] @ self.params["W" + index] + self.params["b" + index]
-            if i < self.num_layers: # only relu hidden layers, not final output
-                h[h < 0] = 0
-            self.output[i] = h
 
-        scores = self.output[-1]
+        outputs = [None] * (self.num_layers + 1)
+        outputs[0] = X
+        caches = [None] * (self.num_layers + 1)
+
+        for i in range(1, self.num_layers + 1):
+            idx = str(i)
+            W, b = self.params["W" + idx], self.params["b" + idx]
+            out, cache = affine_forward(outputs[i-1], W, b)
+            if i < self.num_layers: # only relu hidden layers, not final output
+                out[out < 0] = 0
+            outputs[i] = out
+            caches[i] = cache
+
+        scores = outputs[-1]
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
@@ -327,37 +333,27 @@ class FullyConnectedNet(object):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        # subtract row max from each row
-        scores[range(N)] -= scores.max(axis=1, keepdims=True)
-        scores = np.exp(scores)
-
-        # compute softmax loss
-        correct_scores = scores[range(N), y]
-        score_sums = scores.sum(axis=1)
-        probs = correct_scores / score_sums
-        log_probs = np.log(probs)
-        loss = -log_probs.sum()
-
-        # average the loss, then add regularization for each of the weights
-        loss /= N
+        loss, dscores = softmax_loss(scores, y)
         for i in range(1, self.num_layers + 1):
-            loss += 0.5 * self.reg * np.sum(self.params["W" + str(i)]**2)
+            idx = str(i)
+            W = self.params["W" + idx]
+            loss += 0.5 * self.reg * np.sum(W**2)
+        # print(loss)
 
-        # again, need to first backprop scores from softmax
-        scores /= score_sums.reshape(-1,1)
-        scores[range(N), y] -= 1
-        dscores = scores / N
-
-        dh_i = dscores
+        d_i = dscores # gradient of output of layer i
         for i in range(self.num_layers, 0, -1):
             # backprop h_i = h_(i-1) @ W_i + b_i
             idx = str(i)
-            grads["W" + idx] = self.output[i-1].T @ dh_i
-            # again, note regularization is implicitly multiplied by (0.5 * 2)
-            grads["W" + idx] += self.reg * self.params["W" + idx]
-            grads["b" + idx] = np.sum(dh_i, axis=0)
-            dh_i = dh_i @ self.params["W" + idx].T
-            dh_i *= (self.output[i-1] > 0) # backprop relu
+            W, b = "W" + idx, "b" + idx
+
+            pre = caches[i][0] # NOTE: output of layer i-1, or input of layer i
+
+            d_pre, grads[W], grads[b] = affine_backward(d_i, caches[i])
+            grads[W] += self.reg * self.params[W]
+            # remember relu of previous layer's output is input to current layer
+            # so we need to backprop this relu
+            d_pre *= (outputs[i-1] > 0)
+            d_i = d_pre
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
