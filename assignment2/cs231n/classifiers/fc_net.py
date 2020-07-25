@@ -58,7 +58,6 @@ class TwoLayerNet(object):
         self.params["b1"] = np.zeros((hidden_dim,))
         self.params["W2"] = np.random.normal(scale=weight_scale, size=(hidden_dim, num_classes))
         self.params["b2"] = np.zeros((num_classes,))
-        #self.params["b1"] = self.params["b2"]=0
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
@@ -91,11 +90,12 @@ class TwoLayerNet(object):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        N = X.shape[0]
-        X = X.reshape((N,-1))
-        h = X @ self.params["W1"] + self.params["b1"]
-        h[h < 0] = 0
-        scores = h @ self.params["W2"] + self.params["b2"]
+        out1, cache1 = affine_forward(X, self.params["W1"], self.params["b1"])
+        # out1 = output of first hidden layer
+        # cache1 = X, W1, b1
+        out1[out1 < 0] = 0
+        scores, cache2 = affine_forward(out1, self.params["W2"], self.params["b2"])
+        # cache2 = out1, W2, b2
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
@@ -119,43 +119,19 @@ class TwoLayerNet(object):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        # subtract row max from each row
-        scores[range(N)] -= scores.max(axis=1, keepdims=True)
-        scores = np.exp(scores)
-
-        # compute softmax loss
-        correct_scores = scores[range(N), y]
-        score_sums = scores.sum(axis=1)
-        probs = correct_scores / score_sums
-        log_probs = np.log(probs)
-        loss = -log_probs.sum()
-
-        # average the loss (note no regularization)
-        loss /= N
+        loss, dscores = softmax_loss(scores, y)
         loss += 0.5 * self.reg * ((self.params["W1"]**2).sum() + (self.params["W2"]**2).sum())
 
-        # first we need to backprop scores matrix from loss function
-        # see: http://bigstuffgoingon.com/blog/posts/softmax-loss-gradient/
-        scores /= score_sums.reshape(-1,1) # divide each entry by its row sum
-        scores[range(N), y] -= 1
-        dscores = scores / N
-
         grads = {}
-        # shapes: h (N, H), W2 (H, C), b2 (1,C), scores(N,C)
 
-        # backprop scores = h @ W2 + b2
-        # sanity checks: each gradient should have same shape as corresponding parameter
-        grads["W2"] = h.T @ dscores # (H,C)
-        grads["W2"] += self.reg * self.params["W2"] # multiplied implicitly by (0.5 * 2)
-        grads["b2"] = np.sum(dscores, axis=0) # (1,C)
-        dh = dscores @ self.params["W2"].T # (N,H)
-        dh *= (h > 0) # backprop relu
+        # backprop scores = out1 @ W2 + b2
+        dout1, grads["W2"], grads["b2"] = affine_backward(dscores, cache2)
+        grads["W2"] += self.reg * self.params["W2"]
+        dout1 *= (out1 > 0) # backprop relu on out1
 
         # backprop h = X @ W1 + b1
-        # shapes: X (N,D), W1 (D,H), b1 (1,H)
-        grads["W1"] = X.T @ dh # (D,H)
-        grads["W1"] += self.reg * self.params["W1"] # multiplied implicitly by (0.5 * 2)
-        grads["b1"] = np.sum(dh, axis=0)
+        _, grads["W1"], grads["b1"] = affine_backward(dout1, cache1)
+        grads["W1"] += self.reg * self.params["W1"]
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
@@ -163,7 +139,6 @@ class TwoLayerNet(object):
         ############################################################################
 
         return loss, grads
-
 
 class FullyConnectedNet(object):
     """
