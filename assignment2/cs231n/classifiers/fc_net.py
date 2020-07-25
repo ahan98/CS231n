@@ -43,7 +43,7 @@ class TwoLayerNet(object):
         """
         self.params = {}
         self.reg = reg
-############################################################################
+        ############################################################################
         # TODO: Initialize the weights and biases of the two-layer net. Weights    #
         # should be initialized from a Gaussian centered at 0.0 with               #
         # standard deviation equal to weight_scale, and biases should be           #
@@ -120,7 +120,6 @@ class TwoLayerNet(object):
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
         # subtract row max from each row
-        N = X.shape[0]
         scores[range(N)] -= scores.max(axis=1, keepdims=True)
         scores = np.exp(scores)
 
@@ -218,9 +217,14 @@ class FullyConnectedNet(object):
         self.normalization = normalization
         self.use_dropout = dropout != 1
         self.reg = reg
-        self.num_layers = 1 + len(hidden_dims)
         self.dtype = dtype
         self.params = {}
+
+        # params added by me
+        self.num_layers = len(hidden_dims) + 1 # hidden + output
+        self.output = [None] * (self.num_layers + 1)
+        # output[i] denotes output of layer i, where input denotes layer 0,
+        # output[-1] denotes output of final layer
 
         ############################################################################
         # TODO: Initialize the parameters of the network, storing all values in    #
@@ -238,18 +242,18 @@ class FullyConnectedNet(object):
 
         # store params for hidden layers
         last_input_dim = input_dim
-        for layer, h in enumerate(hidden_dims):
-            layer_index = str(layer + 1)
-            self.params["W" + layer_index] = np.random.normal(scale=weight_scale,\
-                                                               size=(last_input_dim, h))
-            self.params["b" + layer_index] = np.zeros((h,))
+        for i, h in enumerate(hidden_dims):
+            index = str(i + 1)
+            self.params["W" + index] = np.random.normal(scale=weight_scale,\
+                                                        size=(last_input_dim, h))
+            self.params["b" + index] = np.zeros((h,))
             last_input_dim = h
 
         # store params for output layer
-        layer_index = str(len(hidden_dims) + 1)
-        self.params["W" + layer_index] = np.random.normal(scale=weight_scale,\
-                                                          size=(last_input_dim, num_classes))
-        self.params["b" + layer_index] = np.zeros((num_classes,))
+        index = str(self.num_layers)
+        self.params["W" + index] = np.random.normal(scale=weight_scale,\
+                                                    size=(last_input_dim, num_classes))
+        self.params["b" + index] = np.zeros((num_classes,))
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
@@ -311,22 +315,17 @@ class FullyConnectedNet(object):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        # N = X.shape[0]
-        # X = X.reshape((N,-1))
-        # h = X @ self.params["W1"] + self.params["b1"]
-        # h[h < 0] = 0
-        # scores = h @ self.params["W2"] + self.params["b2"]
+        N = X.shape[0]
+        X = X.reshape((N,-1))
+        self.output[0] = X
+        for i in range(1, self.num_layers + 1):
+            index = str(i)
+            h = self.output[i-1] @ self.params["W" + index] + self.params["b" + index]
+            if i < self.num_layers: # only relu hidden layers, not final output
+                h[h < 0] = 0
+            self.output[i] = h
 
-        num_layers = len(self.params) // 2
-        last_input = X
-        for layer in range(1, num_layers + 1):
-            index = str(layer)
-            h = last_input @ self.params["W" + index] + self.params["b" + index]
-            h[h < 0] = 0
-            last_input = h
-
-        scores = h
-        # print(scores)
+        scores = self.output[-1]
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
@@ -353,44 +352,37 @@ class FullyConnectedNet(object):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        # # subtract row max from each row
-        # N = X.shape[0]
-        # scores[range(N)] -= scores.max(axis=1, keepdims=True)
-        # scores = np.exp(scores)
+        # subtract row max from each row
+        scores[range(N)] -= scores.max(axis=1, keepdims=True)
+        scores = np.exp(scores)
 
-        # # compute softmax loss
-        # correct_scores = scores[range(N), y]
-        # score_sums = scores.sum(axis=1)
-        # probs = correct_scores / score_sums
-        # log_probs = np.log(probs)
-        # loss = -log_probs.sum()
+        # compute softmax loss
+        correct_scores = scores[range(N), y]
+        score_sums = scores.sum(axis=1)
+        probs = correct_scores / score_sums
+        log_probs = np.log(probs)
+        loss = -log_probs.sum()
 
-        # # average the loss (note no regularization)
-        # loss /= N
-        # loss += 0.5 * self.reg * ((self.params["W1"]**2).sum() + (self.params["W2"]**2).sum())
+        # average the loss, then add regularization for each of the weights
+        loss /= N
+        for i in range(1, self.num_layers + 1):
+            loss += 0.5 * self.reg * np.sum(self.params["W" + str(i)]**2)
 
-        # # first we need to backprop scores matrix from loss function
-        # # see: http://bigstuffgoingon.com/blog/posts/softmax-loss-gradient/
-        # scores /= score_sums.reshape(-1,1) # divide each entry by its row sum
-        # scores[range(N), y] -= 1
-        # dscores = scores / N
+        # again, need to first backprop scores from softmax
+        scores /= score_sums.reshape(-1,1)
+        scores[range(N), y] -= 1
+        dscores = scores / N
 
-        # grads = {}
-        # # shapes: h (N, H), W2 (H, C), b2 (1,C), scores(N,C)
-
-        # # backprop scores = h @ W2 + b2
-        # # sanity checks: each gradient should have same shape as corresponding parameter
-        # grads["W2"] = h.T @ dscores # (H,C)
-        # grads["W2"] += self.reg * self.params["W2"] # multiplied implicitly by (0.5 * 2)
-        # grads["b2"] = np.sum(dscores, axis=0) # (1,C)
-        # dh = dscores @ self.params["W2"].T # (N,H)
-        # dh *= (h > 0) # backprop relu
-
-        # # backprop h = X @ W1 + b1
-        # # shapes: X (N,D), W1 (D,H), b1 (1,H)
-        # grads["W1"] = X.T @ dh # (D,H)
-        # grads["W1"] += self.reg * self.params["W1"] # multiplied implicitly by (0.5 * 2)
-        # grads["b1"] = np.sum(dh, axis=0)
+        dh_i = dscores
+        for i in range(self.num_layers, 0, -1):
+            # backprop h_i = h_(i-1) @ W_i + b_i
+            idx = str(i)
+            grads["W" + idx] = self.output[i-1].T @ dh_i
+            # again, note regularization is implicitly multiplied by (0.5 * 2)
+            grads["W" + idx] += self.reg * self.params["W" + idx]
+            grads["b" + idx] = np.sum(dh_i, axis=0)
+            dh_i = dh_i @ self.params["W" + idx].T
+            dh_i *= (self.output[i-1] > 0) # backprop relu
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
