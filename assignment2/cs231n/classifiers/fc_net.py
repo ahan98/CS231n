@@ -297,6 +297,14 @@ class FullyConnectedNet(object):
         outputs[0] = X
         caches = [None] * (self.num_layers + 1)
 
+        # compute and save intermediate layers in the forward pass
+        # outputs[i] stores the neurons in layer i = 0,1,...,N
+        # outputs[0] stores the input data
+        # outputs[1..N-1] stores the hidden layers
+        # outputs[N] stores the output scores
+        # caches[i] stores the inputs into layer i = 0,1,...N
+        # cache[0] is None, since no inputs into input layer
+        # cache[j] = (outputs[j-1], W_j, b_j) for j = 1,...,N
         for i in range(1, self.num_layers + 1):
             idx = str(i)
             W, b = self.params["W" + idx], self.params["b" + idx]
