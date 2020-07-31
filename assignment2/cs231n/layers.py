@@ -208,6 +208,8 @@ def batchnorm_forward(x, gamma, beta, bn_param):
         #######################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
+        # see: https://kratzert.github.io/2016/02/12/understanding-the-gradient-flow-through-the-batch-normalization-layer.html
+
         mu = 1/N * np.sum(x, axis=0) # 1,D
 
         xmu = x - mu # N,D
@@ -355,7 +357,15 @@ def batchnorm_backward_alt(dout, cache):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    (xhat, gamma, xmu, ivar, sqrtvar, var, eps) = cache
+
+    dbeta = np.sum(dout, axis=0)
+    dgamma = np.sum(xhat * dout, axis=0)
+
+    N,D = dout.shape
+
+    dxhat = dout * gamma
+    dx = (ivar/N) * (N * dxhat - xhat * np.sum(dxhat * xhat, axis=0) - np.sum(dxhat, axis=0))
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
