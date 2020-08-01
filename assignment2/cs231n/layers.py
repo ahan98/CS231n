@@ -26,7 +26,7 @@ def affine_forward(x, w, b):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    N, D = x.shape[0], w.shape[0]
+    N,D = x.shape
     x_reshape = np.reshape(x, (N,D))
     out = (x_reshape @ w) + b
 
@@ -126,9 +126,7 @@ def relu_backward(dout, cache):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    # backprop out = relu(x)
-    dx = (x > 0).astype('float')
-    dx *= dout
+    dx = (x > 0).astype('float') * dout
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
