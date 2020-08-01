@@ -292,7 +292,7 @@ class FullyConnectedNet(object):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        outputs, fc_cache, bn_cache, relu_cache = self.sandwich_layers_forward(X)
+        outputs, fc_cache, norm_cache, relu_cache = self.sandwich_layers_forward(X)
         scores = outputs[-1]
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -327,7 +327,7 @@ class FullyConnectedNet(object):
             loss += 0.5 * self.reg * np.sum(W**2)
         # print(loss)
 
-        grads = self.sandwich_layers_backward(dscores, fc_cache, bn_cache, relu_cache)
+        grads = self.sandwich_layers_backward(dscores, fc_cache, norm_cache, relu_cache)
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
@@ -339,9 +339,10 @@ class FullyConnectedNet(object):
     def sandwich_layers_forward(self, X):
         """
         Computes and saves the intermediate layers in the forward pass in the
-        following order: X -> affine -> batchnorm -> ReLU -> dropout
+        following order: X -> affine -> batch/layernorm -> ReLU -> dropout
 
-        NOTE: batchnorm and dropout apply (optionally) only to hidden layers.
+        NOTE: Normalization and dropout are optional and apply only to hidden
+        layers.
 
         The input x has shape (N, d_1, ..., d_k) and contains a minibatch of N
         examples, where each example x[i] has shape (d_1, ..., d_k). We will
@@ -359,25 +360,23 @@ class FullyConnectedNet(object):
         N = X.shape[0]
         X = X.reshape((N,-1))
 
-        # outputs[i] denotes layer i, for i = 0,1,...,N
-        # layer 0 = input layer, layer N = output layer
-        # layers 1..N-1 = hidden layers
+        # for each of these caches, i = 0,1,...,N denotes layer index
+        # 0 = input layer, N = output layer, 1..N-1 = hidden layers
+
         outputs = [None] * (self.num_layers + 1)
         outputs[0] = X
 
-        # fc_cache[i] stores the inputs for layer i = 0,1,...N
         # fc_cache[0] is None, since no inputs for input layer
         # fc_cache[j] = (outputs[j-1], W_j, b_j) for j = 1,...,N
         fc_cache = [None] * (self.num_layers + 1)
 
-        # bn_cache[i] stores batchnormed output from outputs[i]
-        # bn is not applied to input nor output layers, so bn_cache[0] and
-        # bn_cache[-1] are both None
-        bn_cache = [None] * (self.num_layers + 1)
+        # norm_cache[i] stores batch/layernormed output from outputs[i].
+        # bn is not applied to input nor output layers, so norm_cache[0] and
+        # norm_cache[-1] are both None.
+        norm_cache = [None] * (self.num_layers + 1)
 
-        # relu_cache[i] stores relu'd output from outputs[i]
-        # relu is not applied to input nor output layers, so relu_cache[0] and
-        # relu_cache[-1] are both None
+        # relu_cache[i] stores relu'd output from outputs[i] or norm_cache[i].
+        # similar to norm_cache, relu_cache[0] = relu_cache[-1] = None.
         relu_cache = [None] * (self.num_layers + 1)
 
         for i in range(1, self.num_layers + 1):
@@ -386,28 +385,30 @@ class FullyConnectedNet(object):
             out, fc = affine_forward(outputs[i-1], W, b)
 
             # transform hidden layers layers (i = 1,...,N-1)
-            bn = drop = None
+            norm = relu = None
             if i < self.num_layers:
 
-                if self.normalization == "batchnorm":
+                if self.normalization:
                     gamma = self.params["gamma" + idx]
                     beta = self.params["beta" + idx]
                     bn_param = self.bn_params[i-1]
-                    out, bn = batchnorm_forward(out, gamma, beta, bn_param)
-                # elif self.normalization == "dropout":
-                #     out, dropout_cache = ...
+
+                    if self.normalization == "batchnorm":
+                        out, norm = batchnorm_forward(out, gamma, beta, bn_param)
+                    elif self.normalization == "layernorm":
+                        out, norm = layernorm_forward(out, gamma, beta, bn_param)
 
                 out, relu = relu_forward(out)
 
             outputs[i] = out
             fc_cache[i] = fc
-            bn_cache[i] = bn
+            norm_cache[i] = norm
             relu_cache[i] = relu
             # dropout_cache[i] = drop
 
-        return outputs, fc_cache, bn_cache, relu_cache#, dropout_cache
+        return outputs, fc_cache, norm_cache, relu_cache#, dropout_cache
 
-    def sandwich_layers_backward(self, dscores, fc_cache, bn_cache, relu_cache):
+    def sandwich_layers_backward(self, dscores, fc_cache, norm_cache, relu_cache):
         grads = {}
 
         # We begin with the current layer as the output layer, for which there
@@ -419,7 +420,7 @@ class FullyConnectedNet(object):
         grads[W] += self.reg * self.params[W]
 
         # In the forward pass, the sequence of transformations on input X is:
-        # X -> affine -> batchnorm -> ReLU -> dropout
+        # X -> affine -> batch/layernorm -> ReLU -> dropout
         # So in the backward pass, we just undo each transformation (if
         # applicable) in the opposite order.
         for i in range(self.num_layers - 1, 0, -1):
@@ -429,8 +430,11 @@ class FullyConnectedNet(object):
 
             # before, d_pre is the gradient for the input of layer i+1
             d_pre = relu_backward(d_pre, relu_cache[i])
-            if bn_cache[i]:
-                d_pre, grads[gamma], grads[beta] = batchnorm_backward_alt(d_pre, bn_cache[i])
+            if self.normalization == "batchnorm":
+                d_pre, grads[gamma], grads[beta] = batchnorm_backward_alt(d_pre, norm_cache[i])
+            elif self.normalization == "layernorm":
+                d_pre, grads[gamma], grads[beta] = layernorm_backward(d_pre, norm_cache[i])
+
             # if dropout_cache[i]:
             #     d_pre = dropout_backward(d_pre, dropout_cache[i])
             d_pre, grads[W], grads[b] = affine_backward(d_pre, fc_cache[i])
