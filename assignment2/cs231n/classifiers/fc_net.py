@@ -218,17 +218,22 @@ class FullyConnectedNet(object):
         # store params for hidden layers
         last_input_dim = input_dim
         for i, h in enumerate(hidden_dims):
-            index = str(i + 1)
-            self.params["W" + index] = np.random.normal(scale=weight_scale,\
+            idx = str(i + 1)
+            self.params["W" + idx] = np.random.normal(scale=weight_scale,\
                                                         size=(last_input_dim, h))
-            self.params["b" + index] = np.zeros((h,))
+            self.params["b" + idx] = np.zeros((h,))
+
+            if self.normalization:
+                self.params["gamma" + idx] = np.ones((h,))
+                self.params["beta" + idx] = np.zeros((h,))
+
             last_input_dim = h
 
         # store params for output layer
-        index = str(self.num_layers)
-        self.params["W" + index] = np.random.normal(scale=weight_scale,\
+        idx = str(self.num_layers)
+        self.params["W" + idx] = np.random.normal(scale=weight_scale,\
                                                     size=(last_input_dim, num_classes))
-        self.params["b" + index] = np.zeros((num_classes,))
+        self.params["b" + idx] = np.zeros((num_classes,))
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
@@ -309,8 +314,16 @@ class FullyConnectedNet(object):
             idx = str(i)
             W, b = self.params["W" + idx], self.params["b" + idx]
             out, cache = affine_forward(outputs[i-1], W, b)
-            if i < self.num_layers: # only relu hidden layers, not final output
-                out[out < 0] = 0
+
+            # if normalizing layer, do so before relu activation
+            if self.normalization:
+                gamma, beta = self.params["gamma" + idx], self.params["beta" + idx]
+                out = (gamma * out) + beta
+
+            # only relu hidden layers (1..N-1), not final output (N)
+            if i < self.num_layers:
+                out, _ = relu_forward(out)
+
             outputs[i] = out
             caches[i] = cache
 
@@ -348,20 +361,20 @@ class FullyConnectedNet(object):
             loss += 0.5 * self.reg * np.sum(W**2)
         # print(loss)
 
-        d_i = dscores # gradient of output of layer i
+        d_i = dscores  # gradient of output of layer i
         for i in range(self.num_layers, 0, -1):
             # backprop h_i = h_(i-1) @ W_i + b_i
             idx = str(i)
             W, b = "W" + idx, "b" + idx
 
-            pre = caches[i][0] # NOTE: output of layer i-1, or input of layer i
-
+            pre = caches[i][0]  # output of layer i-1, or input of layer i
             d_pre, grads[W], grads[b] = affine_backward(d_i, caches[i])
             grads[W] += self.reg * self.params[W]
-            # remember relu of previous layer's output is input to current layer
-            # so we need to backprop this relu
-            d_pre *= (outputs[i-1] > 0)
-            d_i = d_pre
+
+            # note relu of previous layer's output is input to current layer,
+            # so to get the true output of the previous layer (d_pre), we need
+            # to backprop relu AFTER affine
+            d_i = relu_backward(d_pre, outputs[i-1])
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
