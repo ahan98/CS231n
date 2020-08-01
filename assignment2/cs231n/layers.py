@@ -26,7 +26,7 @@ def affine_forward(x, w, b):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    N,D = x.shape
+    N,D = x.shape[0], w.shape[0]
     x_reshape = np.reshape(x, (N,D))
     out = (x_reshape @ w) + b
 
@@ -244,6 +244,7 @@ def batchnorm_forward(x, gamma, beta, bn_param):
         #######################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
+        # NOTE: input is normalized using running mean/variance from TRAINING
         x_hat = (x - running_mean) / (np.sqrt(running_var + eps))
         out = (gamma * x_hat) + beta
 
