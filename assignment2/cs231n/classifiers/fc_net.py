@@ -217,7 +217,7 @@ class FullyConnectedNet(object):
         for i, h in enumerate(hidden_dims):
             idx = str(i + 1)
             self.params["W" + idx] = np.random.normal(scale=weight_scale,\
-                                                        size=(last_input_dim, h))
+                                                      size=(last_input_dim, h))
             self.params["b" + idx] = np.zeros((h,))
 
             if self.normalization:
@@ -229,7 +229,7 @@ class FullyConnectedNet(object):
         # store params for output layer
         idx = str(self.num_layers)
         self.params["W" + idx] = np.random.normal(scale=weight_scale,\
-                                                    size=(last_input_dim, num_classes))
+                                                  size=(last_input_dim, num_classes))
         self.params["b" + idx] = np.zeros((num_classes,))
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -292,7 +292,7 @@ class FullyConnectedNet(object):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        outputs, fc_cache, norm_cache, relu_cache = self.sandwich_layers_forward(X)
+        outputs, fc_cache, norm_cache, relu_cache, drop_cache = self.sandwich_layers_forward(X)
         scores = outputs[-1]
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -327,7 +327,8 @@ class FullyConnectedNet(object):
             loss += 0.5 * self.reg * np.sum(W**2)
         # print(loss)
 
-        grads = self.sandwich_layers_backward(dscores, fc_cache, norm_cache, relu_cache)
+        grads = self.sandwich_layers_backward(dscores, fc_cache, norm_cache,\
+                                              relu_cache, drop_cache)
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
@@ -376,8 +377,12 @@ class FullyConnectedNet(object):
         norm_cache = [None] * (self.num_layers + 1)
 
         # relu_cache[i] stores relu'd output from outputs[i] or norm_cache[i].
-        # similar to norm_cache, relu_cache[0] = relu_cache[-1] = None.
+        # similarly, relu_cache[0] = relu_cache[-1] = None.
         relu_cache = [None] * (self.num_layers + 1)
+
+        # drop_cache[i] stores ouput of relu[i] after dropout is applied
+        # similarly, drop_cache[0] = drop_cache[-1] = None.
+        drop_cache = [None] * (self.num_layers + 1)
 
         for i in range(1, self.num_layers + 1):
             idx = str(i)
@@ -385,7 +390,7 @@ class FullyConnectedNet(object):
             out, fc = affine_forward(outputs[i-1], W, b)
 
             # transform hidden layers layers (i = 1,...,N-1)
-            norm = relu = None
+            norm = drop = relu = None
             if i < self.num_layers:
 
                 if self.normalization:
@@ -398,17 +403,21 @@ class FullyConnectedNet(object):
                     elif self.normalization == "layernorm":
                         out, norm = layernorm_forward(out, gamma, beta, bn_param)
 
+                if self.use_dropout:
+                    out, drop = dropout_forward(out, self.dropout_param)
+
                 out, relu = relu_forward(out)
 
             outputs[i] = out
             fc_cache[i] = fc
             norm_cache[i] = norm
             relu_cache[i] = relu
-            # dropout_cache[i] = drop
+            drop_cache[i] = drop
 
-        return outputs, fc_cache, norm_cache, relu_cache#, dropout_cache
+        return outputs, fc_cache, norm_cache, relu_cache, drop_cache
 
-    def sandwich_layers_backward(self, dscores, fc_cache, norm_cache, relu_cache):
+    def sandwich_layers_backward(self, dscores, fc_cache, norm_cache,
+                                 relu_cache, drop_cache):
         grads = {}
 
         # We begin with the current layer as the output layer, for which there
@@ -429,14 +438,13 @@ class FullyConnectedNet(object):
             gamma, beta = "gamma" + idx, "beta" + idx
 
             # before, d_pre is the gradient for the input of layer i+1
+            if self.use_dropout:
+                d_pre = dropout_backward(d_pre, drop_cache[i])
             d_pre = relu_backward(d_pre, relu_cache[i])
             if self.normalization == "batchnorm":
                 d_pre, grads[gamma], grads[beta] = batchnorm_backward_alt(d_pre, norm_cache[i])
             elif self.normalization == "layernorm":
                 d_pre, grads[gamma], grads[beta] = layernorm_backward(d_pre, norm_cache[i])
-
-            # if dropout_cache[i]:
-            #     d_pre = dropout_backward(d_pre, dropout_cache[i])
             d_pre, grads[W], grads[b] = affine_backward(d_pre, fc_cache[i])
             # after, d_pre is the gradient for the input of layer i
 
