@@ -1,5 +1,6 @@
 from builtins import range
 import numpy as np
+from .im2col_alex import *
 
 def affine_forward(x, w, b):
     """
@@ -620,7 +621,29 @@ def conv_forward_naive(x, w, b, conv_param):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    stride, pad = conv_param["stride"], conv_param["pad"]
+    N, C, H, W = x.shape
+    F, C, HH, WW = w.shape
+
+    pad_x = np.pad(x, ((0,0), (0,0), (pad, pad), (pad,pad)), "constant")
+
+    assert (H - HH + 2*pad) % stride == 0
+    assert (W - WW + 2*pad) % stride == 0
+    n_down = int(1 + (H - HH + 2*pad) / stride)
+    n_across = int(1 + (W - WW + 2*pad) / stride)
+    out = np.zeros((N, F, n_down, n_across))
+
+    for img in range(N):
+        for filt in range(F):
+            for row in range(n_down):
+                win_r = stride * row  # starting row of local window
+                for col in range(n_across):
+                    win_c = stride * col  # starting col of local window
+                    for c in range(C):
+                        window = pad_x[img, c, win_r : win_r+HH, win_c : win_c+WW]
+                        out[img, filt, row, col] += np.sum(w[filt, c, :, :] * window)
+
+                    out[img, filt, row, col] += b[filt]
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
