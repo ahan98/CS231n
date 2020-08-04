@@ -289,7 +289,6 @@ def batchnorm_backward(dout, cache):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    # see: https://kratzert.github.io/2016/02/12/understanding-the-gradient-flow-through-the-batch-normalization-layer.html
     N, D = dout.shape
     (xhat, gamma, xmu, ivar, sqrtvar, var, eps) = cache
 
@@ -625,7 +624,7 @@ def conv_forward_naive(x, w, b, conv_param):
     N, C, H, W = x.shape
     F, C, HH, WW = w.shape
 
-    pad_x = np.pad(x, ((0,0), (0,0), (pad, pad), (pad,pad)), "constant")
+    x_pad = np.pad(x, ((0,0), (0,0), (pad, pad), (pad,pad)), "constant")
 
     assert (H - HH + 2*pad) % stride == 0
     assert (W - WW + 2*pad) % stride == 0
@@ -633,17 +632,17 @@ def conv_forward_naive(x, w, b, conv_param):
     n_across = int(1 + (W - WW + 2*pad) / stride)
     out = np.zeros((N, F, n_down, n_across))
 
-    for img in range(N):
-        for filt in range(F):
+    for n in range(N):
+        for f in range(F):
             for row in range(n_down):
                 win_r = stride * row  # starting row of local window
                 for col in range(n_across):
                     win_c = stride * col  # starting col of local window
                     for c in range(C):
-                        window = pad_x[img, c, win_r : win_r+HH, win_c : win_c+WW]
-                        out[img, filt, row, col] += np.sum(w[filt, c, :, :] * window)
+                        window = x_pad[n, c, win_r : win_r+HH, win_c : win_c+WW]
+                        out[n, f, row, col] += np.sum(w[f, c, :, :] * window)
 
-                    out[img, filt, row, col] += b[filt]
+                    out[n, f, row, col] += b[f]
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -672,7 +671,49 @@ def conv_backward_naive(dout, cache):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    # unpack params
+    x, w, b, conv_param = cache
+    N, F, out_H, out_W = dout.shape
+    N, C, H, W = x.shape
+    pad, stride = conv_param["pad"], conv_param["stride"]
+
+    # re-pad x
+    x_pad = np.pad(x, ((0,0), (0,0), (pad, pad), (pad,pad)), "constant")
+
+    # init gradients
+    dx_pad, dw, db = np.zeros_like(x_pad), np.zeros_like(w), np.zeros_like(b)
+
+    # The gradient of the weights can be elegantly computed as another
+    # convolution, with the same (padded) image, but using dout as the filter
+    # instead. So treating dout as the filter, we re-compute n_down and
+    # n_across. Be careful not to confuse these with the variables of the same
+    # name in the forward pass, since those are computed with the weights as the
+    # filter.
+    assert (H - out_H + 2*pad) % stride == 0
+    assert (W - out_W + 2*pad) % stride == 0
+    n_down = int(1 + (H - out_H + 2*pad) / stride)
+    n_across = int(1 + (W - out_W + 2*pad) / stride)
+
+    # The gradient of the images is computed similarly. Again, treat the output
+    # as a filter, sliding it over the image. If we imagine we had a pointer
+    # that started in the top-left weight, and incremented it each time the
+    # output/filter made one step, we would see that the current weight
+    # multiplies every pixel in the current window of x in the forward pass,
+    # which is why we add that weight to gradient of each of those pixels.
+    for n in range(N):
+        for f in range(F):
+            db[f] += np.sum(dout[n, f, :, :])
+            for w_row in range(0, stride * n_down, stride):
+                for w_col in range(0, stride * n_across, stride):
+                    for c in range(C):
+                        x_idxs = n, c, slice(w_row, w_row+out_H), slice(w_col, w_col+out_W)
+                        w_idx = f, c, w_row, w_col
+                        cur_dout = dout[n, f, :, :]
+                        dw[w_idx] += np.sum(cur_dout * x_pad[x_idxs])
+                        dx_pad[x_idxs] += w[w_idx] * cur_dout
+
+    # lastly, backprop x <- x_pad
+    dx = dx_pad[:, :, pad : pad+H, pad : pad+W]
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
