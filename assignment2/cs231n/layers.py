@@ -431,8 +431,10 @@ def layernorm_forward(x, gamma, beta, ln_param):
     xhat = xmu * ivar # N,D
 
     gammax = gamma * xhat # N,D
+    print(xhat.shape)
 
     out = gammax + beta # N,D
+    print(out.shape)
 
     cache = (xhat, gamma, xmu, ivar, sqrtvar, var, eps)
 
@@ -850,7 +852,29 @@ def spatial_batchnorm_forward(x, gamma, beta, bn_param):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    # ref: https://github.com/jariasf/CS231n/blob/master/assignment2/cs231n/layers.py#L749
+    # Notice the shapes of gamma and beta are (C,). This suggests we treat C as
+    # our new D, as in regular batchnorm, which takes in a batch of shape (N,D).
+    # When we reshape x this way, our batch becomes N*H*W "images" of depth C.
+    # We can imagine this as treating each pixel across all its channels as a
+    # single batch sample. Now, mean and variance are C-dimensional. For
+    # example, the mean of this pixel batch is a C-dimensional vector denoting
+    # the average pixel in each channel.
+    #
+    # In the typical fully connected case of batchnorm, per-image normalization
+    # makes sense because every image is multiplied by the same weights .
+    # In CNNs however, images in the same channel are convolved with the same
+    # weights, so the distributions are more likely to be consistent within the
+    # same channel, but different across different channels. Therefore,
+    # we have to normalize per-channel since the weights in each channel affect
+    # the distribution of pixel values in each channel differently.
+    #
+    # Original batchnorm paper: https://arxiv.org/pdf/1502.03167.pdf
+    # "For convolutional layers, we additionally want the normalization to obey
+    # the convolutional property – so that different elements of the same
+    # feature map, at different locations, are normalized in the same way. To
+    # achieve this, we jointly normalize all the activations in a minibatch,
+    # over all locations." (p.5)
+
     N, C, H, W = x.shape
     x_t = x.transpose((0, 2, 3, 1)).reshape(-1, C)  # (N, H, W, C) -> (N*H*W, C)
     out, cache = batchnorm_forward(x_t, gamma, beta, bn_param)
@@ -888,7 +912,10 @@ def spatial_batchnorm_backward(dout, cache):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    N, C, H, W = dout.shape
+    dout = dout.transpose((0,2,3,1)).reshape(-1, C)
+    dx, dgamma, dbeta = batchnorm_backward_alt(dout, cache)
+    dx = dx.reshape(N, H, W, C).transpose((0, 3, 1, 2))
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -900,10 +927,11 @@ def spatial_batchnorm_backward(dout, cache):
 
 def spatial_groupnorm_forward(x, gamma, beta, G, gn_param):
     """
-    Computes the forward pass for spatial group normalization.
-    In contrast to layer normalization, group normalization splits each entry
-    in the data into G contiguous pieces, which it then normalizes independently.
-    Per feature shifting and scaling are then applied to the data, in a manner identical to that of batch normalization and layer normalization.
+    Computes the forward pass for spatial group normalization.  In contrast to
+    layer normalization, group normalization splits each entry in the data into
+    G contiguous pieces, which it then normalizes independently.  Per feature
+    shifting and scaling are then applied to the data, in a manner identical to
+    that of batch normalization and layer normalization.
 
     Inputs:
     - x: Input data of shape (N, C, H, W)
@@ -928,7 +956,29 @@ def spatial_groupnorm_forward(x, gamma, beta, G, gn_param):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+
+    # In batchnorm, we normalize each image across all pixels (features).
+    # In layernorm, we normalize each pixel across all images.
+    # In groupnorm, we normalize each group across all images.
+    #
+    # Therefore, we want to reshape x into (A, B), where A is the number of
+    # groups, and B is the number of pixels in each group. Then we perform a
+    # "spatial layernorm", normalizing each group across all imagse, since each
+    # group can be thought of as a "super channel/pixel/feature".
+    #
+    # Notice the notebook mentions that groupnorm assumes the channels/features
+    # in each group contribute to the pixels in each group equally (unlike in
+    # spatial batchnorm). This makes a lot of sense for some methods which
+    # already exist in Computer Vision. For example, in HOG, "after computing
+    # histograms per spatially local block, each per-block histogram is
+    # normalized."
+    N, C, H, W = x.shape
+    mean, var = x.mean(axis=1, keepdims=True), x.var(axis=1, keepdims=True)
+    out = (x - mean) / np.sqrt(eps + var)
+    out.shape = (N, C, H, W)
+    cache = x, G, gamma, beta, out.copy(), mean, var, eps
+    gamma.shape = beta.shape = (1, C, 1, 1)
+    out = out * gamma + beta
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
