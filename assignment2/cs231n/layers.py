@@ -628,19 +628,19 @@ def conv_forward_naive(x, w, b, conv_param):
 
     assert (H - HH + 2*pad) % stride == 0
     assert (W - WW + 2*pad) % stride == 0
-    n_down = int(1 + (H - HH + 2*pad) / stride)
-    n_across = int(1 + (W - WW + 2*pad) / stride)
-    out = np.zeros((N, F, n_down, n_across))
+    H_prime = int(1 + (H - HH + 2*pad) / stride)
+    W_prime = int(1 + (W - WW + 2*pad) / stride)
+    out = np.zeros((N, F, H_prime, W_prime))
 
     for n in range(N):
         for f in range(F):
-            for row in range(n_down):
-                win_r = stride * row  # starting row of local window
-                for col in range(n_across):
-                    win_c = stride * col  # starting col of local window
+            for row in range(H_prime):
+                x_i = stride * row        # starting row of local window in x
+                for col in range(W_prime):
+                    x_j = stride * col    # starting col of local window in x
                     for c in range(C):
-                        window = x_pad[n, c, win_r : win_r+HH, win_c : win_c+WW]
-                        out[n, f, row, col] += np.sum(w[f, c, :, :] * window)
+                        x_view = x_pad[n, c, x_i : x_i+HH, x_j : x_j+WW]
+                        out[n, f, row, col] += np.sum(w[f, c, :, :] * x_view)
 
                     out[n, f, row, col] += b[f]
 
@@ -685,29 +685,29 @@ def conv_backward_naive(dout, cache):
 
     # The gradient of the weights can be elegantly computed as another
     # convolution, with the same (padded) image, but using dout as the filter
-    # instead. So treating dout as the filter, we re-compute n_down and
-    # n_across. Be careful not to confuse these with the variables of the same
+    # instead. So treating dout as the filter, we re-compute H_prime and
+    # W_prime. Be careful not to confuse these with the variables of the same
     # name in the forward pass, since those are computed with the weights as the
     # filter.
     assert (H - out_H + 2*pad) % stride == 0
     assert (W - out_W + 2*pad) % stride == 0
-    n_down = int(1 + (H - out_H + 2*pad) / stride)
-    n_across = int(1 + (W - out_W + 2*pad) / stride)
+    H_prime = int(1 + (H - out_H + 2*pad) / stride)
+    W_prime = int(1 + (W - out_W + 2*pad) / stride)
 
     # The gradient of the images is computed similarly. Again, treat the output
-    # as a filter, sliding it over the image. If we imagine we had a pointer
-    # that started in the top-left weight, and incremented it each time the
+    # as a filter, sliding it over the image. If we imagine a weight pointer
+    # that started at the top-left weight, and incremented it each time the
     # output/filter made one step, we would see that the current weight
     # multiplies every pixel in the current window of x in the forward pass,
-    # which is why we add that weight to gradient of each of those pixels.
+    # which is why we add the weight to each of those pixel's gradients.
     for n in range(N):
         for f in range(F):
             db[f] += np.sum(dout[n, f, :, :])
-            for w_row in range(0, stride * n_down, stride):
-                for w_col in range(0, stride * n_across, stride):
+            for x_i in range(0, stride * H_prime, stride):
+                for x_j in range(0, stride * W_prime, stride):
                     for c in range(C):
-                        x_idxs = n, c, slice(w_row, w_row+out_H), slice(w_col, w_col+out_W)
-                        w_idx = f, c, w_row, w_col
+                        x_idxs = n, c, slice(x_i, x_i+out_H), slice(x_j, x_j+out_W)
+                        w_idx = f, c, x_i, x_j
                         cur_dout = dout[n, f, :, :]
                         dw[w_idx] += np.sum(cur_dout * x_pad[x_idxs])
                         dx_pad[x_idxs] += w[w_idx] * cur_dout
@@ -747,7 +747,23 @@ def max_pool_forward_naive(x, pool_param):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    PH, PW = pool_param["pool_height"], pool_param["pool_width"]
+    stride = pool_param["stride"]
+    N, C, H, W = x.shape
+
+    H_prime = int(1 + (H - PH) / stride)
+    W_prime = int(1 + (W - PW) / stride)
+    out = np.zeros((N, C, H_prime, W_prime))
+
+    for n in range(N):
+        for out_i in range(H_prime):
+            x_i = stride * out_i        # starting row of local window in x
+            for out_j in range(W_prime):
+                x_j = stride * out_j    # starting col of local window in x
+                for c in range(C):
+                    x_view = x[n, c, x_i : x_i+H_prime, x_j : x_j+W_prime]
+                    out[n, c, out_i, out_j] = x_view.max()
+
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -774,7 +790,25 @@ def max_pool_backward_naive(dout, cache):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    x, pool_param = cache
+    stride = pool_param["stride"]
+    N, C, H, W = x.shape
+    N, C, H_prime, W_prime = dout.shape
+
+    dx = np.zeros_like(x)
+
+    for n in range(N):
+        for out_i in range(H_prime):
+            x_i = stride * out_i
+            for out_j in range(W_prime):
+                x_j = stride * out_j
+                for c in range(C):
+                    x_view = x[n, c, x_i : x_i+H_prime, x_j : x_j+W_prime]
+                    max_i, max_j = np.unravel_index(np.argmax(x_view), x_view.shape)
+                    # convert argmax for local window to argmax for entire x
+                    max_i += x_i
+                    max_j += x_j
+                    dx[n, c, max_i, max_j] += dout[n, c, out_i, out_j]
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
