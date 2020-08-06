@@ -72,9 +72,9 @@ class ThreeLayerConvNet(object):
         self.params["b1"] = np.zeros((F,))
 
         # Hidden affine weights/bias
-        # Output shape after conv-relu-pool is (N, C, H_prime, W_prime), where
+        # Output shape after conv-relu-pool is (N, F, H_prime, W_prime), where
         # H_prime and W_prime are the height/width of output after being pooled
-        # by 2 x 2 filter and stride = 1.
+        # by 2 x 2 filter and stride = 2.
         PH = H // 2 # from formula: 1 + (H - 2)//2
         PW = W // 2
         self.params["W2"] = np.random.normal(scale=weight_scale,\
