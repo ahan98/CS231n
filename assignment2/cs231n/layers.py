@@ -1,6 +1,5 @@
 from builtins import range
 import numpy as np
-from .im2col_alex import *
 
 def affine_forward(x, w, b):
     """
