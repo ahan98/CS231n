@@ -292,6 +292,21 @@ def batchnorm_backward(dout, cache):
     N, D = dout.shape
     (xhat, gamma, xmu, ivar, sqrtvar, var, eps) = cache
 
+    # We sum over axis 0 so that the dimensions of dbeta match beta.
+    # dbeta represents how much each individual element of beta affects the
+    # output. In the simplest case, imagine xhat is a column vector, and dbeta
+    # is a scalar. Then we have out = gamma * xhat + beta, and dout/dbeta is 1.
+    #
+    # Imagine the case where beta is a scalar, and out is a length-N column
+    # vector. Then we want to find dout1/dbeta, ..., doutN/dbeta. We start
+    # with beta, map it to a bunch of partials with respect to beta (i.e., each
+    # douti/dbeta), and then map those back to a space with the same dimensions
+    # as beta. That final mapping back to beta's dimensions is done by summing
+    # up over over all intermediate products douti * dout/dbeta.
+    #
+    # The reason we sum over these per-dimension partials is due to the
+    # Multivariate Chain Rule (see: https://youtu.be/hFvBZf-Jx28)
+
     # backprop out = gammax + beta
     dbeta = np.sum(dout, axis=0)
     dgammax = dout
@@ -423,19 +438,11 @@ def layernorm_forward(x, gamma, beta, ln_param):
     # equivalent to 1/D * np.sum(xmu**2, axis=1).reshape(N,-1)
 
     sqrtvar = np.sqrt(var + eps)  # N,1
-
     ivar = 1/sqrtvar  # N,1
-
     xmu = x - mu  # N,D
-
     xhat = xmu * ivar # N,D
-
     gammax = gamma * xhat # N,D
-    print(xhat.shape)
-
     out = gammax + beta # N,D
-    print(out.shape)
-
     cache = (xhat, gamma, xmu, ivar, sqrtvar, var, eps)
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -956,14 +963,13 @@ def spatial_groupnorm_forward(x, gamma, beta, G, gn_param):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-
     # In batchnorm, we normalize each image across all pixels (features).
     # In layernorm, we normalize each pixel across all images.
     # In groupnorm, we normalize each group across all images.
     #
     # Therefore, we want to reshape x into (A, B), where A is the number of
     # groups, and B is the number of pixels in each group. Then we perform a
-    # "spatial layernorm", normalizing each group across all imagse, since each
+    # "spatial layernorm", normalizing each group across all images, since each
     # group can be thought of as a "super channel/pixel/feature".
     #
     # Notice the notebook mentions that groupnorm assumes the channels/features
@@ -972,13 +978,30 @@ def spatial_groupnorm_forward(x, gamma, beta, G, gn_param):
     # already exist in Computer Vision. For example, in HOG, "after computing
     # histograms per spatially local block, each per-block histogram is
     # normalized."
+    #
+    # Now groupnorm is just like layernorm, except we have to reshape the
+    # normalized input back to 4 dimensions, so each group can be broadcasted
+    # with gamma and beta.
+    #
+    # NOTE: keepdims=True keeps mean and var as a 2-D output. We could
+    # choose not to use keepdims, but we'd have to reshape mean and var to
+    # (A, 1) (i.e. transpose row vector into column vector), since x has shape
+    # (A, B). This reshaping is to allow broadcasting with gamma and beta.
+
     N, C, H, W = x.shape
-    mean, var = x.mean(axis=1, keepdims=True), x.var(axis=1, keepdims=True)
-    out = (x - mean) / np.sqrt(eps + var)
-    out.shape = (N, C, H, W)
-    cache = x, G, gamma, beta, out.copy(), mean, var, eps
+    x_group = x.reshape((N * G, C//G * H * W))
+
+    mu, var = x_group.mean(axis=1, keepdims=True), x_group.var(axis=1, keepdims=True)
+    xmu = x_group - mu
+    sqrtvar = np.sqrt(var + eps)
+    ivar = 1 / sqrtvar
+    xhat = xmu * ivar
+
+    xhat.shape = (N, C, H, W)
     gamma.shape = beta.shape = (1, C, 1, 1)
-    out = out * gamma + beta
+    out = xhat * gamma + beta
+
+    cache = (xhat, gamma, xmu, ivar, sqrtvar, var, eps, G)
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -1008,7 +1031,34 @@ def spatial_groupnorm_backward(dout, cache):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    # In groupnorm forward pass, we reshape into 2d, normalize, then reshape
+    # back to 4d, and finally compute out using gamma and beta.
+    #
+    # So in the backward pass, we want to compute dbeta and dgamma while
+    # everything is still 4d, then reshape to 2d, compute dx, and finally
+    # reshape back to 4d.
+    #
+    # Computing dx is literally the exact same as in layernorm backwards pass,
+    # especially since we reshape back to 2d first. Computing dbeta and dgamma
+    # is still almost the exact same, since we are summing over every axis that
+    # is NOT the channel axis (so axes 0, 2, and 3). We sum over all the
+    # non-channel axes so that the shape of dbeta matches beta, and the
+    # intuitive interpretation of this sum is the same as in backprop of normal
+    # batchnorm and layernorm.
+
+    (xhat, gamma, xmu, ivar, sqrtvar, var, eps, G) = cache
+    N, C, H, W = dout.shape
+
+    dbeta = np.sum(dout, axis=(0,2,3), keepdims=True)
+    dgamma = np.sum(xhat * dout, axis=(0,2,3), keepdims=True)
+
+    dxhat = dout * gamma
+    dxhat.shape = xhat.shape = (N * G, C//G * H * W)
+
+    dx1 = xhat * np.sum(dxhat * xhat, axis=1, keepdims=True)
+    dx2 = np.sum(dxhat, axis=1, keepdims=True)
+    dx = ivar * (dxhat - (dx1 + dx2) / (C//G * H * W))
+    dx.shape = (N, C, H, W)
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
